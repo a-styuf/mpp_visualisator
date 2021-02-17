@@ -17,6 +17,7 @@ class Device:
         self.a = 1
         self.b = 0
         self.serial = None
+        self.dev_offset = 0
         for key in sorted(kw):
             if key == "serial_numbers":
                 self.serial_numbers = kw.pop(key)
@@ -32,6 +33,8 @@ class Device:
                 self.a = kw.pop(key)
             elif key == "b":
                 self.b = kw.pop(key)
+            elif key == "dev_offset":
+                self.offset = kw.pop(key)
             else:
                 pass
         self.state = 0
@@ -78,6 +81,11 @@ class Device:
         self._connect_serial_by_ser_num()
 
     def send_com(self, data_list):
+        """
+        Отправка команды в МПП. В конце, к отправленным данным приделывается crc16-ModBus
+        :param data_list: лист с данными
+        :return:
+        """
         send_buff = data_list
         crc16 = my_crc16.calc_crc16_bytes(send_buff)
         send_buff.extend(crc16)
@@ -178,15 +186,20 @@ class Device:
             self.osc_spectra[0] = 0
         pass
 
-    def data_pars(self):
+    def data_pars(self, offset=0):
+        """
+
+        :param offset: 0 - БКАП, 2 - СКЭ-ЛР
+        :return:
+        """
         if self.read_row_data:
             self.pulse_row_data = self.read_row_data[3 + 8:3 + 8 + 24]
-            self.pulse_width = int.from_bytes(self.pulse_row_data[8:12], byteorder='big') * 0.025
-            self.pulse_zero_count = int.from_bytes(self.pulse_row_data[12:14], byteorder='big')
-            self.pulse_peak = self.a * int.from_bytes(self.pulse_row_data[14:16], byteorder='big')
-            self.pulse_power = self.a * int.from_bytes(self.pulse_row_data[16:20], byteorder='big') * 0.025
-            self.pulse_mean = self.a * int.from_bytes(self.pulse_row_data[20:22], byteorder='big', signed=False) + self.b
-            self.pulse_noise = self.a * int.from_bytes(self.pulse_row_data[22:24], byteorder='big') / 2 ** 4
+            self.pulse_width = int.from_bytes(self.pulse_row_data[8+offset:12+offset], byteorder='big') * 0.025
+            self.pulse_zero_count = int.from_bytes(self.pulse_row_data[12+offset:14+offset], byteorder='big')
+            self.pulse_peak = self.a * int.from_bytes(self.pulse_row_data[14+offset:16+offset], byteorder='big')
+            self.pulse_power = self.a * int.from_bytes(self.pulse_row_data[16+offset:20+offset], byteorder='big') * 0.025
+            self.pulse_mean = self.a * int.from_bytes(self.pulse_row_data[20+offset:22+offset], byteorder='big', signed=False) + self.b
+            self.pulse_noise = self.a * int.from_bytes(self.pulse_row_data[22+offset:24+offset], byteorder='big') / 2 ** 4
         else:
             self.pulse_width = 0
             self.pulse_zero_count = 0
@@ -216,7 +229,7 @@ class Device:
         # чтение самой новой помехи
         self.read_newest_pulse()
         print(self.report)
-        self.data_pars()
+        self.data_pars(offset=self.dev_offset)
         print(self.report)
         self.osc_read()
         #
